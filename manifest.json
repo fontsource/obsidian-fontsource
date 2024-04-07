@@ -1,0 +1,11 @@
+{
+	"id": "fontsource",
+	"name": "Fontsource",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Load custom fonts from Fontsource into Obsidian.",
+	"author": "Ayuhito",
+	"authorUrl": "https://github.com/ayuhito",
+	"fundingUrl": "https://github.com/sponsors/ayuhito",
+	"isDesktopOnly": false
+}
