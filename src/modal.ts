@@ -186,7 +186,7 @@ export class SelectModal extends Modal {
 		new Setting(contentEl)
 			.setName('Add font')
 			.setDesc(
-				'To support multiple languages, you can select fonts in order of precedence.'
+				'To support additional languages, you can select multiple fonts in order of precedence.'
 			)
 			.addButton((button) => {
 				button.setIcon('plus');
