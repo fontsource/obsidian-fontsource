@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@fontsource-utils/generate':
-    specifier: ^0.3.1
-    version: 0.3.1
+    specifier: ^0.4.0
+    version: 0.4.0
   p-queue:
     specifier: ^8.0.1
     version: 8.0.1
@@ -386,8 +386,8 @@ packages:
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     dev: true
 
-  /@fontsource-utils/generate@0.3.1:
-    resolution: {integrity: sha512-jWKppcMAFBFQxBARO4O1kjAdf1kMHsIwQ0qBLQWKfUvN65v1r/gnuDPpxHYwX0qrfGuglCnOAm1/kJFf9b9msg==}
+  /@fontsource-utils/generate@0.4.0:
+    resolution: {integrity: sha512-+PWkHQK1vFlM+I9LVfE/yOt8T3s0GsZhRNKu89cH/Zg1/G7esgIyyQA2FKnFn16DVhD7f1PkCjZu4VtgiL98dw==}
     dev: false
 
   /@humanwhocodes/config-array@0.11.14:
