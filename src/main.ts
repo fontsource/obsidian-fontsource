@@ -1,8 +1,9 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import FontsourceSettingsTab from './settings';
+import type { SettingsMetadata } from './types';
 
 interface PluginSettings {
-	fonts: string[];
+	fonts: SettingsMetadata[];
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {

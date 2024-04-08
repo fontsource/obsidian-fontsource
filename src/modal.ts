@@ -1,19 +1,20 @@
 import { type App, Notice, requestUrl, SuggestModal } from 'obsidian';
 import type FontsourcePlugin from './main';
+import { importFont } from './import';
 
 interface Font {
-	name: string;
+	id: string;
+	family: string;
 }
 
 type FontlistResponse = Record<string, string>;
 
 const getFontlist = async (): Promise<Font[]> => {
-	const response = await requestUrl(
+	const response = (await requestUrl(
 		'https://api.fontsource.org/fontlist?family'
-	);
-	const json: FontlistResponse = await response.json();
+	).json) as FontlistResponse;
 
-	return Object.keys(json).map((name) => ({ name }));
+	return Object.entries(response).map(([id, family]) => ({ id, family }));
 };
 
 export class SearchModal extends SuggestModal<Font> {
@@ -26,38 +27,51 @@ export class SearchModal extends SuggestModal<Font> {
 		this.plugin = plugin;
 
 		this.inputEl.placeholder = 'Select to import a font...';
-		this.emptyStateText = 'No fonts found. :(';
+		this.emptyStateText = 'No fonts found.';
+		this.limit = 2000;
 	}
 
 	// Trigger refresh on import
 	onImported(): void {}
 
-	getSuggestions(query: string): Font[] {
-		const list = this.listCache;
-		if (!list) {
-			getFontlist().then((fonts) => {
-				this.listCache = fonts;
-				return fonts.filter((font) =>
-					font.name.toLowerCase().includes(query.toLowerCase())
-				);
-			});
-		}
-
-		return list.filter((font) =>
-			font.name.toLowerCase().includes(query.toLowerCase())
+	private filterFonts(query: string): Font[] {
+		return this.listCache.filter((font) =>
+			font.family.toLowerCase().includes(query.toLowerCase())
 		);
 	}
 
-	renderSuggestion(item: Font, el: HTMLElement): void {
-		el.setText(item.name);
+	async getSuggestions(query: string): Promise<Font[]> {
+		if (!this.listCache) {
+			const fonts = await getFontlist();
+			this.listCache = fonts;
+			return this.filterFonts(query);
+		}
+
+		return this.filterFonts(query);
 	}
 
-	onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent) {
-		new Notice(`Importing ${font.name}...`);
-		this.onImported();
+	renderSuggestion(item: Font, el: HTMLElement): void {
+		el.setText(item.family);
+	}
 
-		// TODO: IMPORT FONTS
+	async onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent) {
+		new Notice(`Importing ${font.family}...`);
 
-		new Notice(`Imported ${font.name}.`);
+		try {
+			const metadata = await importFont(font.id, this.plugin);
+
+			// Add the font to the settings
+			const fonts = this.plugin.settings.fonts
+				.filter((f) => f.id !== metadata.id)
+				.concat(metadata);
+			this.plugin.settings.fonts = fonts;
+			await this.plugin.saveSettings();
+
+			this.onImported();
+			new Notice(`Imported ${font.family}.`);
+		} catch (error) {
+			console.error('Error importing font:', error);
+			new Notice(`Unable to import ${font.family}.`);
+		}
 	}
 }

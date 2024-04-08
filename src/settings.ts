@@ -3,6 +3,7 @@ import {
 	PluginSettingTab,
 	Setting,
 	type ButtonComponent,
+	Notice,
 } from 'obsidian';
 import type FontsourcePlugin from 'src/main';
 import { SearchModal } from './modal';
@@ -13,38 +14,49 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const { app, containerEl, plugin, display } = this;
-		containerEl.empty();
+		this.containerEl.empty();
 
-		new Setting(containerEl)
+		new Setting(this.containerEl)
 			.setName('Select Fonts')
 			.setDesc('Add a font from the Fontsource directory.')
 			.addButton((button: ButtonComponent) => {
 				button.setButtonText('+');
 				button.onClick(() => {
-					const modal = new SearchModal(app, plugin);
+					const modal = new SearchModal(this.app, this.plugin);
 					modal.onImported = () => {
-						display(); // Refresh
+						this.display(); // Refresh
 					};
 					modal.open();
 				});
 			});
 
-		containerEl.createEl('h3', { text: 'Imported Fonts' });
+		this.containerEl.createEl('h3', { text: 'Imported Fonts' });
 
 		// Display all imported fonts
-		const fonts = plugin.settings.fonts;
+		const fonts = this.plugin.settings.fonts;
 		for (const font of fonts) {
-			new Setting(containerEl)
-				.setName(font)
+			new Setting(this.containerEl)
+				.setName(font.family)
 				.addButton((button: ButtonComponent) => {
 					button.setButtonText('Remove');
-					button.onClick(() => {
-						plugin.settings.fonts = plugin.settings.fonts.filter(
-							(f) => f !== font
-						);
-						plugin.saveSettings();
-						display(); // Refresh
+					button.onClick(async () => {
+						// Delete CSS file from Vault
+						const vault = this.plugin.app.vault;
+						try {
+							await vault.adapter.remove(
+								`${vault.configDir}/fonts/${font.id}.css`
+							);
+							// If successful, remove from settings
+							this.plugin.settings.fonts = this.plugin.settings.fonts.filter(
+								(f) => f.id !== font.id
+							);
+							this.plugin.saveSettings();
+							new Notice(`Deleted ${font.family}.`);
+							this.display(); // Refresh
+						} catch (error) {
+							console.error('Error deleting font:', error);
+							new Notice(`Unable to delete ${font.id}.css from Vault.`);
+						}
 					});
 				});
 		}
