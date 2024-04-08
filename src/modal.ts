@@ -122,34 +122,48 @@ export class SearchActiveModal extends SuggestModal<Font> {
 	private addFontToSettings = (
 		fonts: SettingsPrecedence[],
 		font: Font
-	): void => {
-		const size = fonts.length;
+	): boolean => {
 		if (!this.checkExists(font.id, fonts)) {
 			fonts.push({
 				id: font.id,
 				family: font.family,
-				precedence: size + 1,
+				precedence: 0,
 			});
+
+			return true;
 		}
+
+		return false;
 	};
 
 	onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent) {
+		let changed = false;
 		switch (this.type) {
 			case 'interface':
-				this.addFontToSettings(this.plugin.settings.interfaceFonts, font);
+				changed = this.addFontToSettings(
+					this.plugin.settings.interfaceFonts,
+					font
+				);
 				break;
 			case 'text':
-				this.addFontToSettings(this.plugin.settings.textFonts, font);
+				changed = this.addFontToSettings(this.plugin.settings.textFonts, font);
 				break;
 			case 'monospace':
-				this.addFontToSettings(this.plugin.settings.monospaceFonts, font);
+				changed = this.addFontToSettings(
+					this.plugin.settings.monospaceFonts,
+					font
+				);
 				break;
 		}
 
 		this.plugin.saveSettings();
 		this.refresh();
 		this.close();
-		new Notice(`Selected ${font.family}.`);
+		if (changed) {
+			new Notice(`Selected ${font.family}.`);
+		} else {
+			new Notice(`${font.family} is already selected.`);
+		}
 	}
 }
 
@@ -215,7 +229,13 @@ export class SelectModal extends Modal {
 			contentEl.createEl('p', { text: 'No fonts selected.' });
 		}
 
-		fonts.sort((a, b) => a.precedence - b.precedence);
+		// Sort by precedence, else by family
+		fonts.sort((a, b) => {
+			if (a.precedence === b.precedence) {
+				return a.family.localeCompare(b.family);
+			}
+			return a.precedence - b.precedence;
+		});
 		for (const font of fonts) {
 			new Setting(contentEl)
 				.setName(font.family)
@@ -225,10 +245,7 @@ export class SelectModal extends Modal {
 					text.setPlaceholder('Precedence');
 					text.onChange((value) => {
 						if (/^\d+$/.test(value)) {
-							const precedence = Number.parseInt(value);
-							font.precedence = precedence
-								? Math.min(precedence, fonts.length)
-								: 1;
+							font.precedence = Number.parseInt(value);
 							// Sort by precedence
 							fonts.sort((a, b) => a.precedence - b.precedence);
 							this.plugin.saveSettings();
