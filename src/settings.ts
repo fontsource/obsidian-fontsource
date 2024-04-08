@@ -100,15 +100,17 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 		for (const font of fonts) {
 			// Create description fragment
 			const desc = new DocumentFragment();
-			desc.createEl('p', {
+			desc.createSpan({
 				text: `Weights: ${font.weights.join(', ')}`,
-			}).style.lineHeight = '0.4';
-			desc.createEl('p', {
+			});
+			desc.createEl('br');
+			desc.createSpan({
 				text: `Styles: ${font.styles.join(', ')}`,
-			}).style.lineHeight = '0.4';
-			desc.createEl('p', {
+			});
+			desc.createEl('br');
+			desc.createSpan({
 				text: `Subsets: ${font.subsets.join(', ')}`,
-			}).style.lineHeight = '0.4';
+			});
 
 			new Setting(containerEl)
 				.setName(font.family)
