@@ -2,6 +2,7 @@ import { arrayBufferToBase64, requestUrl } from 'obsidian';
 import type { FontMetadata, SettingsMetadata } from './types';
 import { generateCss } from './css';
 import type FontsourcePlugin from './main';
+import PQueue from 'p-queue';
 
 const fetchMetadata = async (id: string): Promise<FontMetadata> => {
 	const metadata = await requestUrl(`https://api.fontsource.org/v1/fonts/${id}`)
@@ -18,6 +19,7 @@ const fetchMetadata = async (id: string): Promise<FontMetadata> => {
 	const font: FontMetadata = {
 		id: metadata.id,
 		family: metadata.family,
+		subsets: metadata.subsets,
 		styles: metadata.styles,
 		weights: metadata.weights,
 		variable,
@@ -26,13 +28,6 @@ const fetchMetadata = async (id: string): Promise<FontMetadata> => {
 	};
 
 	return font;
-};
-
-const downloadFileToBase64 = async (url: string): Promise<string> => {
-	console.log('Downloading:', url);
-	const response = await requestUrl(url).arrayBuffer;
-	console.log('Downloaded:', url);
-	return arrayBufferToBase64(response);
 };
 
 // Return the axes with the most available options
@@ -57,35 +52,77 @@ const getAxes = (variable: NonNullable<FontMetadata['variable']>): string => {
 	return 'full';
 };
 
+// Make downloads concurrent for better performance
+const queue = new PQueue({ concurrency: 12 });
+
+const downloadFileToBase64 = async (url: string): Promise<string> => {
+	const response = await requestUrl(url).arrayBuffer;
+	return arrayBufferToBase64(response);
+};
+
 const populateBase64 = async (
 	metadata: FontMetadata
 ): Promise<FontMetadata> => {
-	if (metadata.variable) {
-		const axesKey = getAxes(metadata.variable);
+	let subsets = Object.keys(metadata.unicodeRange);
+	if (subsets.length === 0) {
+		subsets = metadata.subsets;
+	}
 
-		for (const style of metadata.styles) {
-			for (const subset of Object.keys(metadata.unicodeRange)) {
-				const key = `${subset}-${axesKey}-${style}`;
-				const url = `https://cdn.jsdelivr.net/fontsource/fonts/${metadata.id}:vf@latest/${key}.woff2`;
-				const base64 = await downloadFileToBase64(url);
-				metadata.base64[`${subset}-${style}`] = base64;
-			}
+	// Generate a download key based on variable or non-variable fonts
+	const generateKey = (oldSubset: string, style: string, weight?: number) => {
+		// Subset may have square brackets if a unicode key
+		const subset = oldSubset.replace(/\[|\]/g, '');
+
+		if (metadata.variable) {
+			const axesKey = getAxes(metadata.variable);
+			return `${subset}-${axesKey}-${style}`;
 		}
-	} else {
-		for (const style of metadata.styles) {
+
+		return `${subset}-${weight}-${style}`;
+	};
+
+	// Wrap all queued downloads into a promise that updates the base64 map
+	// when resolved
+	const promises = [];
+
+	for (const style of metadata.styles) {
+		if (metadata.variable) {
+			for (const subset of subsets) {
+				const key = generateKey(subset, style);
+				const url = `https://cdn.jsdelivr.net/fontsource/fonts/${metadata.id}:vf@latest/${key}.woff2`;
+				promises.push(
+					queue.add(() =>
+						downloadFileToBase64(url).then((base64) => {
+							metadata.base64[`${subset}-${style}`] = base64;
+						})
+					)
+				);
+			}
+		} else {
 			for (const weight of metadata.weights) {
-				for (const subset of Object.keys(metadata.unicodeRange)) {
-					const key = `${subset}-${weight}-${style}`;
+				for (const subset of subsets) {
+					const key = generateKey(subset, style, weight);
 					const url = `https://cdn.jsdelivr.net/fontsource/fonts/${metadata.id}@latest/${key}.woff2`;
-					const base64 = await downloadFileToBase64(url);
-					metadata.base64[`${subset}-${weight}-${style}`] = base64;
+					promises.push(
+						queue.add(() =>
+							downloadFileToBase64(url).then((base64) => {
+								metadata.base64[key] = base64;
+							})
+						)
+					);
 				}
 			}
 		}
 	}
 
+	await Promise.all(promises);
+
 	return metadata;
 };
+
+queue.on('error', () => {
+	queue.clear();
+});
 
 const importFont = async (
 	id: string,
@@ -109,6 +146,7 @@ const importFont = async (
 	return {
 		id: metadata.id,
 		family: metadata.family,
+		subsets: metadata.subsets,
 		styles: metadata.styles,
 		weights: metadata.weights,
 		variable: metadata.variable,

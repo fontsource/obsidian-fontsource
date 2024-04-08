@@ -1,6 +1,7 @@
 interface SettingsMetadata {
 	id: string;
 	family: string;
+	subsets: string[];
 	styles: string[];
 	weights: number[];
 	variable?: {

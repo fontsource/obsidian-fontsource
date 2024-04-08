@@ -4,10 +4,16 @@ import type { FontMetadata } from './types';
 const generateCss = (metadata: FontMetadata): string => {
 	let css = '';
 
-	// Generate font-face rules
+	// Non-Google fonts don't have unicode ranges
+	let subsets = Object.keys(metadata.unicodeRange);
+	if (subsets.length === 0) {
+		subsets = metadata.subsets;
+	}
+
 	if (metadata.variable) {
+		// Generate font-face rules
 		for (const style of metadata.styles) {
-			for (const subset of Object.keys(metadata.unicodeRange)) {
+			for (const subset of subsets) {
 				const font: FontObject = {
 					family: metadata.family,
 					style,
@@ -34,7 +40,7 @@ const generateCss = (metadata: FontMetadata): string => {
 	} else {
 		for (const style of metadata.styles) {
 			for (const weight of metadata.weights) {
-				for (const subset of Object.keys(metadata.unicodeRange)) {
+				for (const subset of subsets) {
 					const font: FontObject = {
 						family: metadata.family,
 						style,
