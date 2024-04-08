@@ -150,6 +150,7 @@ const importFont = async (
 		styles: metadata.styles,
 		weights: metadata.weights,
 		variable: metadata.variable,
+		isActive: false,
 	};
 };
 

@@ -1,4 +1,4 @@
-interface SettingsMetadata {
+interface BaseMetadata {
 	id: string;
 	family: string;
 	subsets: string[];
@@ -11,11 +11,23 @@ interface SettingsMetadata {
 	};
 }
 
-interface FontMetadata extends SettingsMetadata {
+interface SettingsMetadata extends BaseMetadata {
+	isActive: boolean;
+}
+
+interface SettingsPrecedence {
+	family: string;
+	id: string;
+	precedence: number;
+}
+
+interface FontMetadata extends BaseMetadata {
 	// subset-weight-style -> base64
 	base64: Record<string, string>;
 	// subset -> unicode range
 	unicodeRange: Record<string, string>;
 }
 
-export type { SettingsMetadata, FontMetadata };
+type FontType = 'interface' | 'text' | 'monospace';
+
+export type { SettingsMetadata, SettingsPrecedence, FontMetadata, FontType };

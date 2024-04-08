@@ -1,5 +1,6 @@
 import { type FontObject, generateFontFace } from '@fontsource-utils/generate';
 import type { FontMetadata } from './types';
+import type FontsourcePlugin from './main';
 
 const generateCss = (metadata: FontMetadata): string => {
 	let css = '';
@@ -66,4 +67,28 @@ const generateCss = (metadata: FontMetadata): string => {
 	return css;
 };
 
-export { generateCss };
+const applyCss = async (id: string, plugin: FontsourcePlugin) => {
+	// Check if stylesheet exists in DOM
+	const existing = document.getElementById(`fontsource-${id}`);
+
+	// If not, create a new stylesheet
+	if (!existing) {
+		const css = await plugin.app.vault.adapter.read(
+			`${plugin.app.vault.configDir}/fonts/${id}.css`
+		);
+
+		const style = document.createElement('style');
+		style.id = `fontsource-${id}`;
+		style.innerHTML = css;
+		document.head.appendChild(style);
+	}
+};
+
+const removeCss = (id: string) => {
+	const existing = document.getElementById(`fontsource-${id}`);
+	if (existing) {
+		existing.remove();
+	}
+};
+
+export { applyCss, removeCss, generateCss };
