@@ -1,5 +1,5 @@
 import { type FontObject, generateFontFace } from '@fontsource-utils/generate';
-import type { FontMetadata } from './types';
+import type { FontMetadata, SettingsPrecedence } from './types';
 import type FontsourcePlugin from './main';
 
 const generateCss = (metadata: FontMetadata): string => {
@@ -34,6 +34,7 @@ const generateCss = (metadata: FontMetadata): string => {
 						stretch: metadata.variable.stretch,
 						slnt: metadata.variable.slnt,
 					},
+					comment: `${metadata.id}-variable-${style}`,
 				};
 				css += generateFontFace(font);
 			}
@@ -56,6 +57,7 @@ const generateCss = (metadata: FontMetadata): string => {
 							},
 						],
 						unicodeRange: metadata.unicodeRange[subset],
+						comment: `${metadata.id}-${weight}-${style}`,
 					};
 
 					css += generateFontFace(font);
@@ -63,7 +65,6 @@ const generateCss = (metadata: FontMetadata): string => {
 			}
 		}
 	}
-
 	return css;
 };
 
@@ -71,15 +72,16 @@ const applyCss = async (id: string, plugin: FontsourcePlugin) => {
 	// Check if stylesheet exists in DOM
 	const existing = document.getElementById(`fontsource-${id}`);
 
-	// If not, create a new stylesheet
-	if (!existing) {
-		const css = await plugin.app.vault.adapter.read(
-			`${plugin.app.vault.configDir}/fonts/${id}.css`
-		);
-
+	// If found, replace with new stylesheet, else append new stylesheet
+	const css = await plugin.app.vault.adapter.read(
+		`${plugin.app.vault.configDir}/fonts/${id}.css`,
+	);
+	if (existing) {
+		existing.replaceWith(css);
+	} else {
 		const style = document.createElement('style');
 		style.id = `fontsource-${id}`;
-		style.innerHTML = css;
+		style.textContent = css;
 		document.head.appendChild(style);
 	}
 };
@@ -91,4 +93,55 @@ const removeCss = (id: string) => {
 	}
 };
 
-export { applyCss, removeCss, generateCss };
+// Extract font families into a string for CSS
+const extractFontFamilies = (fonts: SettingsPrecedence[]) =>
+	fonts
+		// Sort by precedence then family name
+		.sort((a, b) => {
+			if (a.precedence === b.precedence) {
+				return a.family.localeCompare(b.family);
+			}
+
+			return a.precedence - b.precedence;
+		})
+		.map((font) => `'${font.family}'`)
+		.join(', ');
+
+const updateCssVariables = (plugin: FontsourcePlugin) => {
+	const id = 'fontsource-css-variables';
+	const { interfaceFonts, textFonts, monospaceFonts } = plugin.settings;
+
+	// Generate CSS variables
+	const interfaceFont = extractFontFamilies(interfaceFonts);
+	const textFont = extractFontFamilies(textFonts);
+	const monospaceFont = extractFontFamilies(monospaceFonts);
+
+	// Generate CSS text
+	const cssText = `
+		${interfaceFont ? `--font-interface-override: ${interfaceFont};` : ''}
+		${textFont ? `--font-text-override: ${textFont};` : ''}
+		${textFont ? `--font-print-override: ${textFont};` : ''}
+		${monospaceFont ? `--font-monospace-override: ${monospaceFont};` : ''}
+	`;
+
+	// Create or update style element
+	let style = document.getElementById(id);
+
+	// If CSS variables are empty, remove style element or do not apply
+	if (cssText.trim() === '') {
+		if (style) {
+			style.remove();
+		}
+		return;
+	}
+
+	// Apply variables
+	if (!style) {
+		style = document.createElement('style');
+		style.id = id;
+		document.head.appendChild(style);
+	}
+	style.textContent = `body { ${cssText} }`;
+};
+
+export { applyCss, removeCss, generateCss, updateCssVariables };

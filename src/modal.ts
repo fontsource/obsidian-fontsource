@@ -19,7 +19,7 @@ type FontlistResponse = Record<string, string>;
 
 const getFontlist = async (): Promise<Font[]> => {
 	const response = (await requestUrl(
-		'https://api.fontsource.org/fontlist?family'
+		'https://api.fontsource.org/fontlist?family',
 	).json) as FontlistResponse;
 
 	return Object.entries(response).map(([id, family]) => ({ id, family }));
@@ -43,7 +43,7 @@ export class SearchModal extends SuggestModal<Font> {
 
 	private filterFonts(query: string): Font[] {
 		return this.listCache.filter((font) =>
-			font.family.toLowerCase().includes(query.toLowerCase())
+			font.family.toLowerCase().includes(query.toLowerCase()),
 		);
 	}
 
@@ -92,7 +92,7 @@ export class SearchActiveModal extends SuggestModal<Font> {
 		app: App,
 		plugin: FontsourcePlugin,
 		type: FontType,
-		refresh: () => void
+		refresh: () => void,
 	) {
 		super(app);
 		this.plugin = plugin;
@@ -107,7 +107,8 @@ export class SearchActiveModal extends SuggestModal<Font> {
 	getSuggestions(query: string): Font[] {
 		return this.plugin.settings.fonts.filter(
 			(font) =>
-				font.family.toLowerCase().includes(query.toLowerCase()) && font.isActive
+				font.family.toLowerCase().includes(query.toLowerCase()) &&
+				font.isActive,
 		);
 	}
 
@@ -121,7 +122,7 @@ export class SearchActiveModal extends SuggestModal<Font> {
 
 	private addFontToSettings = (
 		fonts: SettingsPrecedence[],
-		font: Font
+		font: Font,
 	): boolean => {
 		if (!this.checkExists(font.id, fonts)) {
 			fonts.push({
@@ -142,7 +143,7 @@ export class SearchActiveModal extends SuggestModal<Font> {
 			case 'interface':
 				changed = this.addFontToSettings(
 					this.plugin.settings.interfaceFonts,
-					font
+					font,
 				);
 				break;
 			case 'text':
@@ -151,7 +152,7 @@ export class SearchActiveModal extends SuggestModal<Font> {
 			case 'monospace':
 				changed = this.addFontToSettings(
 					this.plugin.settings.monospaceFonts,
-					font
+					font,
 				);
 				break;
 		}
@@ -176,7 +177,7 @@ export class SelectModal extends Modal {
 		app: App,
 		plugin: FontsourcePlugin,
 		type: FontType,
-		refresh: () => void
+		refresh: () => void,
 	) {
 		super(app);
 		this.plugin = plugin;
@@ -200,7 +201,7 @@ export class SelectModal extends Modal {
 		new Setting(contentEl)
 			.setName('Add font')
 			.setDesc(
-				'To support additional languages, you can select multiple fonts in order of precedence.'
+				'To support additional languages, you can select multiple fonts in order of precedence.',
 			)
 			.addButton((button) => {
 				button.setIcon('plus');

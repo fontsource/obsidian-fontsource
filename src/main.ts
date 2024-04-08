@@ -1,7 +1,7 @@
 import { Plugin } from 'obsidian';
 import FontsourceSettingsTab from './settings';
 import type { SettingsMetadata, SettingsPrecedence } from './types';
-import { applyCss } from './css';
+import { applyCss, updateCssVariables } from './css';
 
 interface PluginSettings {
 	fonts: SettingsMetadata[];
@@ -30,6 +30,7 @@ export default class FontsourcePlugin extends Plugin {
 				applyCss(font.id, this);
 			}
 		}
+		updateCssVariables(this);
 	}
 
 	async loadSettings() {
@@ -38,5 +39,21 @@ export default class FontsourcePlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	async onunload() {
+		// Remove CSS variables
+		const existing = document.getElementById('fontsource-css-variables');
+		if (existing) {
+			existing.remove();
+		}
+
+		// Remove loaded base64 fonts
+		for (const font of this.settings.fonts) {
+			const existing = document.getElementById(`fontsource-${font.id}`);
+			if (existing) {
+				existing.remove();
+			}
+		}
 	}
 }

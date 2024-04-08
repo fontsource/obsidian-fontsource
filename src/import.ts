@@ -11,7 +11,7 @@ const fetchMetadata = async (id: string): Promise<FontMetadata> => {
 	let variable: FontMetadata['variable'];
 	if (metadata.variable) {
 		const variableResponse = await requestUrl(
-			`https://api.fontsource.org/v1/variable/${id}`
+			`https://api.fontsource.org/v1/variable/${id}`,
 		).json;
 		variable = variableResponse.axes;
 	}
@@ -43,7 +43,7 @@ const getAxes = (variable: NonNullable<FontMetadata['variable']>): string => {
 	}
 
 	const isStandard = axes.every((axis) =>
-		['wght', 'wdth', 'slnt', 'opsz'].includes(axis)
+		['wght', 'wdth', 'slnt', 'opsz'].includes(axis),
 	);
 	if (isStandard) {
 		return 'standard';
@@ -61,7 +61,7 @@ const downloadFileToBase64 = async (url: string): Promise<string> => {
 };
 
 const populateBase64 = async (
-	metadata: FontMetadata
+	metadata: FontMetadata,
 ): Promise<FontMetadata> => {
 	let subsets = Object.keys(metadata.unicodeRange);
 	if (subsets.length === 0) {
@@ -94,8 +94,8 @@ const populateBase64 = async (
 					queue.add(() =>
 						downloadFileToBase64(url).then((base64) => {
 							metadata.base64[`${subset}-${style}`] = base64;
-						})
-					)
+						}),
+					),
 				);
 			}
 		} else {
@@ -107,8 +107,8 @@ const populateBase64 = async (
 						queue.add(() =>
 							downloadFileToBase64(url).then((base64) => {
 								metadata.base64[key] = base64;
-							})
-						)
+							}),
+						),
 					);
 				}
 			}
@@ -126,7 +126,7 @@ queue.on('error', () => {
 
 const importFont = async (
 	id: string,
-	plugin: FontsourcePlugin
+	plugin: FontsourcePlugin,
 ): Promise<SettingsMetadata> => {
 	// Fetch metadata
 	const metadata = await fetchMetadata(id);

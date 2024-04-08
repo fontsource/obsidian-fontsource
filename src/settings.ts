@@ -8,11 +8,14 @@ import {
 } from 'obsidian';
 import type FontsourcePlugin from 'src/main';
 import { SearchModal, SelectModal } from './modal';
-import { applyCss, removeCss } from './css';
+import { applyCss, removeCss, updateCssVariables } from './css';
 import type { FontType } from './types';
 
 export default class FontsourceSettingsTab extends PluginSettingTab {
-	constructor(app: App, private plugin: FontsourcePlugin) {
+	constructor(
+		app: App,
+		private plugin: FontsourcePlugin,
+	) {
 		super(app, plugin);
 	}
 
@@ -28,9 +31,10 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 				.addButton((button: ButtonComponent) => {
 					button.setButtonText('Manage');
 					button.onClick(() => {
-						new SelectModal(this.app, this.plugin, type, () =>
-							this.display()
-						).open();
+						new SelectModal(this.app, this.plugin, type, () => {
+							this.display();
+							updateCssVariables(this.plugin);
+						}).open();
 					});
 				});
 		};
@@ -38,17 +42,17 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 		addFontSetting(
 			'Interface font',
 			'Set base font for all of Obsidian.',
-			'interface'
+			'interface',
 		);
 		addFontSetting(
 			'Text font',
 			'Set font for editing and reading views.',
-			'text'
+			'text',
 		);
 		addFontSetting(
 			'Monospace font',
 			'Set font for places like code blocks and frontmatter.',
-			'monospace'
+			'monospace',
 		);
 
 		containerEl.createEl('h3', { text: 'Imported Fonts' });
@@ -56,7 +60,7 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 		// Remove font from settings
 		const removeFromSettings = <T extends { id: string }>(
 			settings: T[],
-			id: string
+			id: string,
 		): T[] => {
 			return settings.filter((f) => f.id !== id);
 		};
@@ -64,16 +68,18 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 		const removeFromAppliedFonts = (id: string): void => {
 			this.plugin.settings.interfaceFonts = removeFromSettings(
 				this.plugin.settings.interfaceFonts,
-				id
+				id,
 			);
 			this.plugin.settings.textFonts = removeFromSettings(
 				this.plugin.settings.textFonts,
-				id
+				id,
 			);
 			this.plugin.settings.monospaceFonts = removeFromSettings(
 				this.plugin.settings.monospaceFonts,
-				id
+				id,
 			);
+
+			updateCssVariables(this.plugin);
 		};
 
 		new Setting(containerEl)
@@ -89,7 +95,7 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 
 		// Display all imported fonts in alphabetical order
 		const fonts = this.plugin.settings.fonts.sort((a, b) =>
-			a.family.localeCompare(b.family)
+			a.family.localeCompare(b.family),
 		);
 		for (const font of fonts) {
 			// Create description fragment
@@ -128,12 +134,12 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 						const vault = this.plugin.app.vault;
 						try {
 							await vault.adapter.remove(
-								`${vault.configDir}/fonts/${font.id}.css`
+								`${vault.configDir}/fonts/${font.id}.css`,
 							);
 							removeCss(font.id);
 							this.plugin.settings.fonts = removeFromSettings(
 								this.plugin.settings.fonts,
-								font.id
+								font.id,
 							);
 							removeFromAppliedFonts(font.id);
 
