@@ -55,7 +55,7 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 			'monospace',
 		);
 
-		containerEl.createEl('h3', { text: 'Imported Fonts' });
+		containerEl.createEl('h3', { text: 'Imported fonts' });
 
 		// Remove font from settings
 		const removeFromSettings = <T extends { id: string }>(
@@ -83,7 +83,7 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 		};
 
 		new Setting(containerEl)
-			.setName('Select Fonts')
+			.setName('Select fonts')
 			.setDesc('Add a font from the Fontsource directory.')
 			.addButton((button: ButtonComponent) => {
 				button.setIcon('plus');
