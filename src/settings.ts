@@ -55,7 +55,7 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 			'monospace',
 		);
 
-		containerEl.createEl('h3', { text: 'Imported fonts' });
+		new Setting(containerEl).setName('Imported fonts').setHeading();
 
 		// Remove font from settings
 		const removeFromSettings = <T extends { id: string }>(
