@@ -1,4 +1,4 @@
-# Obsidian Fontsource
+# Fontsource for Obsidian
 
 ![Hero Image](./hero.png)
 
