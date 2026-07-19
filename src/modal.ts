@@ -15,26 +15,24 @@ interface Font {
 	family: string;
 }
 
-type FontlistResponse = Record<string, string>;
-
 const getFontlist = async (): Promise<Font[]> => {
 	const response = (await requestUrl(
 		'https://api.fontsource.org/fontlist?family',
-	).json) as FontlistResponse;
+	)).json as Record<string, string>;
 
 	return Object.entries(response).map(([id, family]) => ({ id, family }));
 };
 
 export class SearchModal extends SuggestModal<Font> {
-	private plugin: FontsourcePlugin;
 	// Cache the list of fonts to avoid fetching it multiple times
-	private listCache: Font[];
-	private refresh: () => void;
+	private listCache?: Font[];
 
-	constructor(app: App, plugin: FontsourcePlugin, refresh: () => void) {
+	constructor(
+		app: App,
+		private plugin: FontsourcePlugin,
+		private refresh: () => void,
+	) {
 		super(app);
-		this.plugin = plugin;
-		this.refresh = refresh;
 
 		this.inputEl.placeholder = 'Select to import a font...';
 		this.emptyStateText = 'No fonts found.';
@@ -42,18 +40,13 @@ export class SearchModal extends SuggestModal<Font> {
 	}
 
 	private filterFonts(query: string): Font[] {
-		return this.listCache.filter((font) =>
+		return (this.listCache ?? []).filter((font) =>
 			font.family.toLowerCase().includes(query.toLowerCase()),
 		);
 	}
 
 	async getSuggestions(query: string): Promise<Font[]> {
-		if (!this.listCache) {
-			const fonts = await getFontlist();
-			this.listCache = fonts;
-			return this.filterFonts(query);
-		}
-
+		this.listCache ??= await getFontlist();
 		return this.filterFonts(query);
 	}
 
@@ -61,7 +54,11 @@ export class SearchModal extends SuggestModal<Font> {
 		el.setText(item.family);
 	}
 
-	async onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent) {
+	onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent): void {
+		void this.importFont(font);
+	}
+
+	private async importFont(font: Font): Promise<void> {
 		new Notice(`Importing ${font.family}...`);
 
 		try {
@@ -84,20 +81,13 @@ export class SearchModal extends SuggestModal<Font> {
 }
 
 export class SearchActiveModal extends SuggestModal<Font> {
-	private plugin: FontsourcePlugin;
-	private type: FontType;
-	private refresh: () => void;
-
 	constructor(
 		app: App,
-		plugin: FontsourcePlugin,
-		type: FontType,
-		refresh: () => void,
+		private plugin: FontsourcePlugin,
+		private type: FontType,
+		private refresh: () => void,
 	) {
 		super(app);
-		this.plugin = plugin;
-		this.type = type;
-		this.refresh = refresh;
 
 		this.inputEl.placeholder = 'Select a font...';
 		this.emptyStateText = 'No fonts found.';
@@ -116,15 +106,11 @@ export class SearchActiveModal extends SuggestModal<Font> {
 		el.setText(item.family);
 	}
 
-	private checkExists = (id: string, fonts: SettingsPrecedence[]): boolean => {
-		return fonts.some((font) => font.id === id);
-	};
-
-	private addFontToSettings = (
+	private addFontToSettings(
 		fonts: SettingsPrecedence[],
 		font: Font,
-	): boolean => {
-		if (!this.checkExists(font.id, fonts)) {
+	): boolean {
+		if (!fonts.some(({ id }) => id === font.id)) {
 			fonts.push({
 				id: font.id,
 				family: font.family,
@@ -135,9 +121,13 @@ export class SearchActiveModal extends SuggestModal<Font> {
 		}
 
 		return false;
-	};
+	}
 
-	onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent) {
+	onChooseSuggestion(font: Font, _evt: MouseEvent | KeyboardEvent): void {
+		void this.selectFont(font);
+	}
+
+	private async selectFont(font: Font): Promise<void> {
 		let changed = false;
 		switch (this.type) {
 			case 'interface':
@@ -157,32 +147,30 @@ export class SearchActiveModal extends SuggestModal<Font> {
 				break;
 		}
 
-		this.plugin.saveSettings();
-		this.refresh();
-		this.close();
-		if (changed) {
-			new Notice(`Selected ${font.family}.`);
-		} else {
-			new Notice(`${font.family} is already selected.`);
+		try {
+			await this.plugin.saveSettings();
+			this.refresh();
+			this.close();
+			if (changed) {
+				new Notice(`Selected ${font.family}.`);
+			} else {
+				new Notice(`${font.family} is already selected.`);
+			}
+		} catch (error) {
+			console.error('Unable to save selected font:', error);
+			new Notice(`Unable to select ${font.family}.`);
 		}
 	}
 }
 
 export class SelectModal extends Modal {
-	private plugin: FontsourcePlugin;
-	private type: FontType;
-	private refresh: () => void;
-
 	constructor(
 		app: App,
-		plugin: FontsourcePlugin,
-		type: FontType,
-		refresh: () => void,
+		private plugin: FontsourcePlugin,
+		private type: FontType,
+		private refresh: () => void,
 	) {
 		super(app);
-		this.plugin = plugin;
-		this.type = type;
-		this.refresh = refresh;
 	}
 
 	rerender(): void {
@@ -244,12 +232,12 @@ export class SelectModal extends Modal {
 				.addText((text) => {
 					text.setValue(String(font.precedence));
 					text.setPlaceholder('Precedence');
-					text.onChange((value) => {
+					text.onChange(async (value) => {
 						if (/^\d+$/.test(value)) {
-							font.precedence = Number.parseInt(value);
+							font.precedence = Number.parseInt(value, 10);
 							// Sort by precedence
 							fonts.sort((a, b) => a.precedence - b.precedence);
-							this.plugin.saveSettings();
+							await this.plugin.saveSettings();
 							this.rerender();
 						} else {
 							text.setValue('0');
@@ -259,11 +247,13 @@ export class SelectModal extends Modal {
 				.addButton((button) => {
 					button.setIcon('x');
 					button.setTooltip('Remove font');
-					button.onClick(() => {
+					button.onClick(async () => {
 						const index = fonts.findIndex((f) => f.id === font.id);
-						fonts.splice(index, 1);
-						this.plugin.saveSettings();
-						this.rerender();
+						if (index >= 0) {
+							fonts.splice(index, 1);
+							await this.plugin.saveSettings();
+							this.rerender();
+						}
 					});
 				});
 		}

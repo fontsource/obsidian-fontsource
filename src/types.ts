@@ -1,14 +1,23 @@
+interface AxisRange {
+	min: number | string;
+	max: number | string;
+}
+
+interface VariableAxes extends Record<string, AxisRange | undefined> {
+	ital?: AxisRange;
+	opsz?: AxisRange;
+	slnt?: AxisRange;
+	wdth?: AxisRange;
+	wght?: AxisRange;
+}
+
 interface BaseMetadata {
 	id: string;
 	family: string;
 	subsets: string[];
 	styles: string[];
 	weights: number[];
-	variable?: {
-		wght?: { min: number; max: number };
-		stretch?: { min: number; max: number };
-		slnt?: { min: number; max: number };
-	};
+	variable?: VariableAxes;
 }
 
 interface SettingsMetadata extends BaseMetadata {
@@ -30,4 +39,10 @@ interface FontMetadata extends BaseMetadata {
 
 type FontType = 'interface' | 'text' | 'monospace';
 
-export type { SettingsMetadata, SettingsPrecedence, FontMetadata, FontType };
+export type {
+	FontMetadata,
+	FontType,
+	SettingsMetadata,
+	SettingsPrecedence,
+	VariableAxes,
+};

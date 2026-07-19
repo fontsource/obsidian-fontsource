@@ -1,22 +1,45 @@
 import { arrayBufferToBase64, requestUrl } from 'obsidian';
-import type { FontMetadata, SettingsMetadata } from './types';
+import { asConcur, forEachConcur } from 'lfi';
+import limitConcur from 'limit-concur';
+import type { FontMetadata, SettingsMetadata, VariableAxes } from './types';
 import { generateCss } from './css';
 import type FontsourcePlugin from './main';
-import PQueue from 'p-queue';
+
+interface FontMetadataResponse {
+	id: string;
+	family: string;
+	subsets: string[];
+	styles: string[];
+	weights: number[];
+	variable: boolean;
+	unicodeRange?: Record<string, string>;
+}
+
+interface VariableMetadataResponse {
+	axes: VariableAxes;
+}
+
+interface Download {
+	key: string;
+	url: string;
+}
 
 const fetchMetadata = async (id: string): Promise<FontMetadata> => {
-	const metadata = await requestUrl(`https://api.fontsource.org/v1/fonts/${id}`)
-		.json;
+	const metadata = (
+		await requestUrl(`https://api.fontsource.org/v1/fonts/${id}`)
+	).json as FontMetadataResponse;
 
 	let variable: FontMetadata['variable'];
 	if (metadata.variable) {
-		const variableResponse = await requestUrl(
-			`https://api.fontsource.org/v1/variable/${id}`,
-		).json;
-		variable = variableResponse.axes;
+		const variableMetadata = (
+			await requestUrl(
+				`https://api.fontsource.org/v1/variable/${id}`,
+			)
+		).json as VariableMetadataResponse;
+		variable = variableMetadata.axes;
 	}
 
-	const font: FontMetadata = {
+	return {
 		id: metadata.id,
 		family: metadata.family,
 		subsets: metadata.subsets,
@@ -24,21 +47,21 @@ const fetchMetadata = async (id: string): Promise<FontMetadata> => {
 		weights: metadata.weights,
 		variable,
 		base64: {},
-		unicodeRange: metadata.unicodeRange,
+		unicodeRange: metadata.unicodeRange ?? {},
 	};
-
-	return font;
 };
 
 // Return the axes with the most available options
 const getAxes = (variable: NonNullable<FontMetadata['variable']>): string => {
-	const axes = Object.keys(variable).filter((axis) => axis !== 'ital');
+	const axes = Object.entries(variable)
+		.filter(([axis, range]) => axis !== 'ital' && range !== undefined)
+		.map(([axis]) => axis);
 
-	if (axes.length === 1 && variable?.wght) {
+	if (axes.length === 1 && variable.wght) {
 		return 'wght';
 	}
 
-	if (axes.length === 2 && variable?.wght) {
+	if (axes.length === 2 && variable.wght) {
 		return axes.find((axis) => axis !== 'wght') ?? 'wght';
 	}
 
@@ -52,17 +75,15 @@ const getAxes = (variable: NonNullable<FontMetadata['variable']>): string => {
 	return 'full';
 };
 
-// Make downloads concurrent for better performance
-const queue = new PQueue({ concurrency: 12 });
-
-const downloadFileToBase64 = async (url: string): Promise<string> => {
-	const response = await requestUrl(url).arrayBuffer;
-	return arrayBufferToBase64(response);
-};
+const downloadFont = limitConcur(
+	12,
+	async (url: string): Promise<string> =>
+		arrayBufferToBase64((await requestUrl(url)).arrayBuffer),
+);
 
 const populateBase64 = async (
 	metadata: FontMetadata,
-): Promise<FontMetadata> => {
+): Promise<void> => {
 	let subsets = Object.keys(metadata.unicodeRange);
 	if (subsets.length === 0) {
 		subsets = metadata.subsets;
@@ -81,63 +102,67 @@ const populateBase64 = async (
 		return `${subset}-${weight}-${style}`;
 	};
 
-	// Wrap all queued downloads into a promise that updates the base64 map
-	// when resolved
-	const promises = [];
+	const downloads: Download[] = [];
 
 	for (const style of metadata.styles) {
 		if (metadata.variable) {
 			for (const subset of subsets) {
 				const key = generateKey(subset, style);
 				const url = `https://cdn.jsdelivr.net/fontsource/fonts/${metadata.id}:vf@latest/${key}.woff2`;
-				promises.push(
-					queue.add(() =>
-						downloadFileToBase64(url).then((base64) => {
-							metadata.base64[`${subset}-${style}`] = base64;
-						}),
-					),
-				);
+				downloads.push({ key: `${subset}-${style}`, url });
 			}
 		} else {
 			for (const weight of metadata.weights) {
 				for (const subset of subsets) {
 					const key = generateKey(subset, style, weight);
 					const url = `https://cdn.jsdelivr.net/fontsource/fonts/${metadata.id}@latest/${key}.woff2`;
-					promises.push(
-						queue.add(() =>
-							downloadFileToBase64(url).then((base64) => {
-								metadata.base64[key] = base64;
-							}),
-						),
-					);
+					downloads.push({ key, url });
 				}
 			}
 		}
 	}
 
-	await Promise.all(promises);
+	let failed = false;
+	let failure: unknown;
+	await forEachConcur(async ({ key, url }) => {
+		try {
+			metadata.base64[key] = await downloadFont(url);
+		} catch (error) {
+			if (!failed) {
+				failed = true;
+				failure = error;
+			}
+		}
+	}, asConcur(downloads));
 
-	return metadata;
+	if (failed) {
+		throw failure;
+	}
 };
-
-queue.on('error', () => {
-	queue.clear();
-});
 
 const importFont = async (
 	id: string,
 	plugin: FontsourcePlugin,
 ): Promise<SettingsMetadata> => {
-	// Fetch metadata
 	const metadata = await fetchMetadata(id);
+	try {
+		await populateBase64(metadata);
+	} catch (error) {
+		if (
+			!metadata.variable ||
+			!(error instanceof Error) ||
+			!error.message.includes('status 404')
+		) {
+			throw error;
+		}
 
-	// Download font files
-	const metadataWithBase64 = await populateBase64(metadata);
+		// Fontsource can publish variable metadata before the matching CDN asset.
+		metadata.variable = undefined;
+		metadata.base64 = {};
+		await populateBase64(metadata);
+	}
+	const css = generateCss(metadata);
 
-	// Generate CSS
-	const css = generateCss(metadataWithBase64);
-
-	// Save CSS
 	const vault = plugin.app.vault;
 	const path = `${vault.configDir}/fonts/${id}.css`;
 	await vault.adapter.mkdir(`${vault.configDir}/fonts`);

@@ -2,13 +2,38 @@
 
 ![Hero Image](./hero.png)
 
-This is a simple plugin to import [Fontsource](https://fontsource.org/) custom fonts into Obsidian.
+Fontsource imports fonts from the [Fontsource](https://fontsource.org/) directory and makes them available throughout Obsidian, including popout windows.
 
-## Contribution
+This version requires Obsidian 1.12 or newer.
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+## Usage
 
-Releasing a new version is done by creating a new tag and pushing it to the repository. The GitHub Actions workflow will build and release the necessary files.
+1. Open **Settings → Fontsource**.
+2. Import a font from the Fontsource directory.
+3. Enable the imported font.
+4. Choose where to use it: interface, text, or monospace.
+
+Multiple fonts can be selected for each role and ordered by precedence to cover additional languages.
+
+## Network and storage
+
+The plugin connects only while listing or importing fonts:
+
+- `api.fontsource.org` provides the font directory and metadata.
+- `cdn.jsdelivr.net` provides the selected WOFF2 font files.
+
+Imported fonts are encoded into CSS files under your vault's configured Obsidian folder at `fonts/<font-id>.css`. The plugin reads and writes only those cache files through Obsidian's vault adapter and stores your selections in its normal plugin settings. Once imported, fonts load from the local cache.
+
+## Development
+
+This project requires Node.js 22.13 or newer and pnpm 11. CI uses Node.js 24.
+
+```sh
+pnpm install
+pnpm check
+```
+
+Run `pnpm dev` to watch the source and write a development bundle into `test-vault/.obsidian/plugins/fontsource`. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and release details.
 
 ## License
 
