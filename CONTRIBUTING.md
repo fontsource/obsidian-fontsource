@@ -23,6 +23,4 @@ Keep changes focused and use [Conventional Commits](https://www.conventionalcomm
 
 Merging the Release Please pull request creates a draft GitHub release. CI rebuilds the plugin, attests and uploads `main.js` and `manifest.json`, and publishes the release only after all checks pass.
 
-Maintainers should configure a `RELEASE_PLEASE_TOKEN` repository secret if they want pull request workflows to run for bot-created release pull requests. Without it, Release Please falls back to `GITHUB_TOKEN`; the release workflow still validates the generated branch itself, but GitHub does not emit follow-up workflow events for resources created with that token.
-
-When using the fallback token, the repository or organization must also allow GitHub Actions to create pull requests.
+Releases use the Fontsource GitHub App configured through the `RELEASE_APP_CLIENT_ID` organization variable and `RELEASE_APP_PRIVATE_KEY` organization secret.

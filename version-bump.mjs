@@ -3,7 +3,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 const { version: targetVersion } = JSON.parse(
 	readFileSync("package.json", "utf8"),
 );
-const allowExisting = process.argv.includes("--allow-existing");
 
 // read minAppVersion from manifest.json and bump version to target version
 const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
@@ -20,9 +19,6 @@ if (Object.hasOwn(versions, targetVersion)) {
 		throw new Error(
 			`${targetVersion} maps to ${versions[targetVersion]}, expected ${minAppVersion}`,
 		);
-	}
-	if (!allowExisting) {
-		throw new Error(`${targetVersion} is already present in versions.json`);
 	}
 } else {
 	versions[targetVersion] = minAppVersion;
