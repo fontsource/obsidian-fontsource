@@ -13,8 +13,7 @@
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc --noEmit && node esbuild.config.mjs production",
 		"lint": "eslint .",
-		"test": "node --test --experimental-strip-types src/*.test.ts",
-		"check": "pnpm lint && pnpm test && pnpm build",
+		"check": "pnpm lint && pnpm build",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [

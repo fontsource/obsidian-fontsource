@@ -68,12 +68,6 @@ const generateCss = (metadata: FontMetadata): string => {
 	return css;
 };
 
-interface ParsedFontFace {
-	family: string;
-	source: string;
-	descriptors: FontFaceDescriptors;
-}
-
 const loadedFonts = new WeakMap<Document, Map<string, FontFace[]>>();
 
 const getWorkspaceDocuments = (
@@ -102,44 +96,6 @@ const stripCssQuotes = (value: string): string => {
 	return trimmed;
 };
 
-const parseDeclarations = (block: string): Map<string, string> => {
-	const declarations = new Map<string, string>();
-	for (const match of block.matchAll(/^\s*([\w-]+)\s*:\s*(.+);\s*$/gm)) {
-		const [, property, value] = match;
-		if (property && value) {
-			declarations.set(property, value.trim());
-		}
-	}
-	return declarations;
-};
-
-export const parseFontFaces = (css: string): ParsedFontFace[] => {
-	const faces = [...css.matchAll(/@font-face\s*\{([^}]*)\}/gi)].map((match) => {
-		const declarations = parseDeclarations(match[1] ?? '');
-		const family = stripCssQuotes(declarations.get('font-family') ?? '');
-		const source = declarations.get('src') ?? '';
-		if (!family || !source) {
-			throw new Error('Cached font CSS is missing a family or source');
-		}
-
-		return {
-			family,
-			source,
-			descriptors: {
-				stretch: declarations.get('font-stretch'),
-				style: declarations.get('font-style'),
-				unicodeRange: declarations.get('unicode-range'),
-				weight: declarations.get('font-weight'),
-			},
-		};
-	});
-
-	if (faces.length === 0) {
-		throw new Error('Cached font CSS does not contain any font faces');
-	}
-	return faces;
-};
-
 const removeCssFromDocument = (id: string, doc: Document): void => {
 	const documentFonts = loadedFonts.get(doc);
 	const faces = documentFonts?.get(id);
@@ -154,14 +110,39 @@ const removeCssFromDocument = (id: string, doc: Document): void => {
 };
 
 const applyCssToDocument = (id: string, css: string, doc: Document): void => {
-	const FontFaceConstructor = doc.defaultView?.FontFace;
-	if (!FontFaceConstructor) {
-		throw new Error('This window does not support the FontFace API');
+	const win = doc.defaultView;
+	if (!win?.CSSStyleSheet || !win.CSSFontFaceRule || !win.FontFace) {
+		throw new Error('This window does not support the required CSS font APIs');
 	}
-	const faces = parseFontFaces(css).map(
-		({ family, source, descriptors }) =>
-			new FontFaceConstructor(family, source, descriptors),
-	);
+
+	const sheet = new win.CSSStyleSheet();
+	sheet.replaceSync(css);
+	const faces: FontFace[] = [];
+	for (const rule of sheet.cssRules) {
+		if (!(rule instanceof win.CSSFontFaceRule)) {
+			continue;
+		}
+
+		const family = stripCssQuotes(rule.style.getPropertyValue('font-family'));
+		const source = rule.style.getPropertyValue('src');
+		if (!family || !source) {
+			throw new Error('Cached font CSS is missing a family or source');
+		}
+
+		faces.push(
+			new win.FontFace(family, source, {
+				stretch: rule.style.getPropertyValue('font-stretch') || undefined,
+				style: rule.style.getPropertyValue('font-style') || undefined,
+				unicodeRange:
+					rule.style.getPropertyValue('unicode-range') || undefined,
+				weight: rule.style.getPropertyValue('font-weight') || undefined,
+			}),
+		);
+	}
+
+	if (faces.length === 0) {
+		throw new Error('Cached font CSS does not contain any font faces');
+	}
 
 	removeCssFromDocument(id, doc);
 	for (const face of faces) {
