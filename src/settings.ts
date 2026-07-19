@@ -1,15 +1,13 @@
 import {
 	type App,
+	Notice,
 	PluginSettingTab,
 	Setting,
-	type ButtonComponent,
-	Notice,
-	type ToggleComponent,
 } from 'obsidian';
-import type FontsourcePlugin from 'src/main';
-import { SearchModal, SelectModal } from './modal';
 import { applyCss, removeCss, updateCssVariables } from './css';
-import type { FontType } from './types';
+import type FontsourcePlugin from './main';
+import { SearchModal, SelectModal } from './modal';
+import type { FontType, SettingsMetadata } from './types';
 
 export default class FontsourceSettingsTab extends PluginSettingTab {
 	constructor(
@@ -19,73 +17,156 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	private createManageSetting(
+		containerEl: HTMLElement,
+		name: string,
+		desc: string,
+		type: FontType,
+	): void {
+		new Setting(containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addButton((button) => {
+				button.setButtonText('Manage');
+				button.onClick(() => {
+					new SelectModal(this.app, this.plugin, type, () => {
+						this.display();
+						updateCssVariables(this.plugin);
+					}).open();
+				});
+			});
+	}
+
+	private removeFromSettings<T extends { id: string }>(
+		settings: T[],
+		id: string,
+	): T[] {
+		return settings.filter((font) => font.id !== id);
+	}
+
+	private removeFromAppliedFonts(id: string): void {
+		this.plugin.settings.interfaceFonts = this.removeFromSettings(
+			this.plugin.settings.interfaceFonts,
+			id,
+		);
+		this.plugin.settings.textFonts = this.removeFromSettings(
+			this.plugin.settings.textFonts,
+			id,
+		);
+		this.plugin.settings.monospaceFonts = this.removeFromSettings(
+			this.plugin.settings.monospaceFonts,
+			id,
+		);
+		updateCssVariables(this.plugin);
+	}
+
+	private async deleteFont(font: SettingsMetadata): Promise<void> {
+		const vault = this.plugin.app.vault;
+		try {
+			await vault.adapter.remove(
+				`${vault.configDir}/fonts/${font.id}.css`,
+			);
+			removeCss(font.id, this.plugin);
+			this.plugin.settings.fonts = this.removeFromSettings(
+				this.plugin.settings.fonts,
+				font.id,
+			);
+			this.removeFromAppliedFonts(font.id);
+			await this.plugin.saveSettings();
+			new Notice(`Deleted ${font.family}.`);
+			this.display();
+		} catch (error) {
+			console.error('Error deleting font:', error);
+			new Notice(`Unable to delete ${font.id}.css from the vault.`);
+		}
+	}
+
+	private createFontSetting(
+		containerEl: HTMLElement,
+		font: SettingsMetadata,
+	): void {
+		const setting = new Setting(containerEl).setName(font.family);
+		setting.descEl.createSpan({
+			text: `Weights: ${font.weights.join(', ')}`,
+		});
+		setting.descEl.createEl('br');
+		setting.descEl.createSpan({ text: `Styles: ${font.styles.join(', ')}` });
+		setting.descEl.createEl('br');
+		setting.descEl.createSpan({ text: `Subsets: ${font.subsets.join(', ')}` });
+		let pending = false;
+		const setPending = (value: boolean): void => {
+			pending = value;
+			setting.setDisabled(value);
+		};
+
+		setting
+			.addToggle((toggle) => {
+				toggle.setValue(font.isActive).onChange(async (value) => {
+					if (pending) {
+						return;
+					}
+					setPending(true);
+					try {
+						if (value) {
+							await applyCss(font.id, this.plugin);
+						} else {
+							removeCss(font.id, this.plugin);
+							this.removeFromAppliedFonts(font.id);
+						}
+
+						font.isActive = value;
+						await this.plugin.saveSettings();
+					} catch (error) {
+						console.error('Unable to update font state:', error);
+						toggle.setValue(font.isActive);
+						new Notice(`Unable to update ${font.family}.`);
+					} finally {
+						setPending(false);
+					}
+				});
+			})
+			.addButton((button) => {
+				button.setIcon('trash-2');
+				button.setTooltip('Remove font');
+				button.onClick(async () => {
+					if (pending) {
+						return;
+					}
+					setPending(true);
+					await this.deleteFont(font);
+					setPending(false);
+				});
+			});
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		// Select where to apply imported fonts
-		const addFontSetting = (name: string, desc: string, type: FontType) => {
-			new Setting(containerEl)
-				.setName(name)
-				.setDesc(desc)
-				.addButton((button: ButtonComponent) => {
-					button.setButtonText('Manage');
-					button.onClick(() => {
-						new SelectModal(this.app, this.plugin, type, () => {
-							this.display();
-							updateCssVariables(this.plugin);
-						}).open();
-					});
-				});
-		};
-
-		addFontSetting(
+		this.createManageSetting(
+			containerEl,
 			'Interface font',
-			'Set base font for all of Obsidian.',
+			'Set the base font for all of Obsidian.',
 			'interface',
 		);
-		addFontSetting(
+		this.createManageSetting(
+			containerEl,
 			'Text font',
-			'Set font for editing and reading views.',
+			'Set the font for editing and reading views.',
 			'text',
 		);
-		addFontSetting(
+		this.createManageSetting(
+			containerEl,
 			'Monospace font',
-			'Set font for places like code blocks and frontmatter.',
+			'Set the font for code blocks and frontmatter.',
 			'monospace',
 		);
 
 		new Setting(containerEl).setName('Imported fonts').setHeading();
-
-		// Remove font from settings
-		const removeFromSettings = <T extends { id: string }>(
-			settings: T[],
-			id: string,
-		): T[] => {
-			return settings.filter((f) => f.id !== id);
-		};
-
-		const removeFromAppliedFonts = (id: string): void => {
-			this.plugin.settings.interfaceFonts = removeFromSettings(
-				this.plugin.settings.interfaceFonts,
-				id,
-			);
-			this.plugin.settings.textFonts = removeFromSettings(
-				this.plugin.settings.textFonts,
-				id,
-			);
-			this.plugin.settings.monospaceFonts = removeFromSettings(
-				this.plugin.settings.monospaceFonts,
-				id,
-			);
-
-			updateCssVariables(this.plugin);
-		};
-
 		new Setting(containerEl)
 			.setName('Select fonts')
-			.setDesc('Add a font from the Fontsource directory.')
-			.addButton((button: ButtonComponent) => {
+			.setDesc('Import a font.')
+			.addButton((button) => {
 				button.setIcon('plus');
 				button.setTooltip('Import font');
 				button.onClick(() => {
@@ -93,67 +174,11 @@ export default class FontsourceSettingsTab extends PluginSettingTab {
 				});
 			});
 
-		// Display all imported fonts in alphabetical order
-		const fonts = this.plugin.settings.fonts.sort((a, b) =>
+		const fonts = [...this.plugin.settings.fonts].sort((a, b) =>
 			a.family.localeCompare(b.family),
 		);
 		for (const font of fonts) {
-			// Create description fragment
-			const desc = new DocumentFragment();
-			desc.createSpan({
-				text: `Weights: ${font.weights.join(', ')}`,
-			});
-			desc.createEl('br');
-			desc.createSpan({
-				text: `Styles: ${font.styles.join(', ')}`,
-			});
-			desc.createEl('br');
-			desc.createSpan({
-				text: `Subsets: ${font.subsets.join(', ')}`,
-			});
-
-			new Setting(containerEl)
-				.setName(font.family)
-				.setDesc(desc)
-				// Toggle to add/remove @font-face fragment to document
-				.addToggle((toggle: ToggleComponent) => {
-					toggle.setValue(font.isActive).onChange((value) => {
-						if (value) {
-							applyCss(font.id, this.plugin);
-						} else {
-							removeCss(font.id);
-							removeFromAppliedFonts(font.id);
-						}
-
-						font.isActive = value;
-						this.plugin.saveSettings();
-					});
-				})
-				.addButton((button: ButtonComponent) => {
-					button.setIcon('trash-2');
-					button.setTooltip('Remove font');
-					button.onClick(async () => {
-						const vault = this.plugin.app.vault;
-						try {
-							await vault.adapter.remove(
-								`${vault.configDir}/fonts/${font.id}.css`,
-							);
-							removeCss(font.id);
-							this.plugin.settings.fonts = removeFromSettings(
-								this.plugin.settings.fonts,
-								font.id,
-							);
-							removeFromAppliedFonts(font.id);
-
-							this.plugin.saveSettings();
-							new Notice(`Deleted ${font.family}.`);
-							this.display();
-						} catch (error) {
-							console.error('Error deleting font:', error);
-							new Notice(`Unable to delete ${font.id}.css from Vault.`);
-						}
-					});
-				});
+			this.createFontSetting(containerEl, font);
 		}
 	}
 }
