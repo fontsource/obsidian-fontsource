@@ -24,14 +24,6 @@ export default defineConfig(
 	},
 	...obsidianmd.configs.recommended,
 	{
-		// Obsidian 1.12 and earlier require imperative settings tabs.
-		files: ['src/settings.ts'],
-		rules: {
-			'@typescript-eslint/no-deprecated': 'off',
-			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
-		},
-	},
-	{
 		files: ['**/*.test.ts'],
 		rules: {
 			'@typescript-eslint/no-floating-promises': 'off',
