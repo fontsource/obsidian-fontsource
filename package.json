@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-fontsource-plugin",
-	"version": "1.1.1",
+	"version": "1.2.0",
 	"description": "This is a plugin to load custom fonts from Fontsource in Obsidian.",
 	"main": "main.js",
 	"type": "module",
